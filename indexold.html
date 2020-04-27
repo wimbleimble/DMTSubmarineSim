@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>Submarine Simulator</title>
+	<script src="js/three.js"></script>
+	<script src="js/GLTFLoader.js"></script>
+	<script src="js/OrbitControls.js"></script>
+	<script src="js/script.js" defer></script>
+	<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+	<div class="container">
+		<div class="column panel">
+			<div>
+				<canvas id="3DViewport" width="500" height="500">Update chrome you fuckwit.</canvas>
+				<div class="overlay column">
+					<span id="frameCounter"></span>
+					<span id="forceDisplay">F: </span>
+					<span id="accelerationDisplay">A: </span>
+					<span id="velocityDisplay">V: </span><br>
+				</div>
+			</div>
+			<div class = "column center">				
+				<div><button id="emergencySurface">Emergency Surface</button></div>
+			</div>
+		</div>
+	</div>
+</body>
+</html>
