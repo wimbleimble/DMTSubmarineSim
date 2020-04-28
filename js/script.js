@@ -1,13 +1,36 @@
 /*---------------------------engine variables---------------------------*/
 const canvas = document.getElementById("3DViewport");
-let loader = new THREE.GLTFLoader();
+let GLTFLoader = new THREE.GLTFLoader();
 let scene = new THREE.Scene();
+let textureLoader = new THREE.TextureLoader();
+scene.background = new THREE.Color(0x0b1536);
 let renderer = new THREE.WebGLRenderer({
 	antialias: true,
 	canvas: canvas
 });
 let deltaTime = 0;
 let previousTime = 0;
+
+//camera
+let camera = new THREE.PerspectiveCamera(90, window.innerWidth/window.innerHeight	, 0.1, 1000);
+
+//camera controls
+let cameraController = new THREE.OrbitControls(camera, canvas);
+cameraController.enableKeys = false;
+
+//inital camera position
+camera.position.set(14, 14, 5);
+cameraController.update();
+
+/*----------------------------post processing---------------------------*/
+/* let compositor = new THREE.EffectComposer(renderer);
+let scenePass = new THREE.RenderPass(scene, camera);
+let bloomPass = new THREE.UnrealBloomPass(scene, new THREE.Vector2( window.innerWidth, window.innerHeight ), 1.5, 0.4, 0.85);
+bloomPass.threshold = 1;
+bloomPass.strength = 0;
+bloomPass.radius = 0;
+compositor.addPass(scenePass);
+compositor.addPass(bloomPass); */
 
 /*-----------------------------ui elements------------------------------*/
 
@@ -16,12 +39,6 @@ let fpsDisplay = document.getElementById("frameCounter");
 let forceDisplay = document.getElementById("forceDisplay");
 let accelerationDisplay = document.getElementById("accelerationDisplay");
 let velocityDisplay = document.getElementById("velocityDisplay");
-
-
-/* let mousePosition = new THREE.Vector2();
-let previousMousePosition = new THREE.Vector2();
-let mouseVelocity = new THREE.Vector2();
-let mouseDown = false; */
 
 /*-------------------------numerical constants--------------------------*/
 const g = 9.81;
@@ -64,31 +81,29 @@ let light = new THREE.PointLight(0xffffff, 1, 0);
 let ambientLight = new THREE.AmbientLight(0x404040);
 scene.add(light);
 scene.add(ambientLight);
-light.position.y = 5;
+light.position.y = 15;
+light.position.x = 5;
 
-//camera
-let camera = new THREE.PerspectiveCamera(90, window.innerWidth/window.innerHeight	, 0.1, 1000);
-
-//camera controls
-let cameraController = new THREE.OrbitControls(camera, canvas);
-cameraController.enableKeys = false;
-
-//inital camera position
-camera.position.set(14, 14, 5);
-cameraController.update();
+//enviroment
+let skyGeom = new THREE.SphereBufferGeometry(500, 60, 40);
+skyGeom.scale(-1, 1, 1);
+let skyTexture = textureLoader.load("Skybox.png");
+let skyMaterial = new THREE.MeshBasicMaterial({ map: skyTexture });
+let sky = new THREE.Mesh(skyGeom, skyMaterial);
+scene.add(sky);
 
 //grid and origin axes
-let grid = new THREE.GridHelper(1000, 100, 0xcc0e74, 0xcc0e74);
+let grid = new THREE.GridHelper(1000, 100, 0xffffff, 0xffffff);
 scene.add(grid);
 let axes = new THREE.AxesHelper(5);
 scene.add(axes);
 
 //submarine
 let submarine = new Submarine();
-loader.load("SubWAY.glb", (gltf) =>
+GLTFLoader.load("submarine.glb", (gltf) =>
 {
 	submarine.model = gltf.scene.children[0];
-	submarine.model.material = new THREE.MeshPhongMaterial({ color: 0xa3f7bf });;
+	submarine.model.material = new THREE.MeshToonMaterial({color: 0x00e052});//gltf.scene.children[0].material;
 	scene.add(submarine.model);
 	updateDimensions();
 	mainLoop(0);
@@ -111,21 +126,6 @@ function updateDisplays()
 	fpsDisplay.innerHTML = Math.round(1000 / deltaTime);
 }
 
-/* function updateMouseVelocity()
-{
-	let tempPos = mousePosition.clone();
-	if(deltaTime != 0)
-	{
-		mouseVelocity = tempPos.sub(previousMousePosition).divideScalar(deltaTime);
-	}
-}
-
-function updatePreviousMousePosition()
-{
-	previousMousePosition = mousePosition.clone();
-}
- */
-
 function positionCamera()
 {
 	camera.position.add(submarine.velocity);
@@ -139,13 +139,10 @@ function mainLoop(currentTime)
 	previousTime = currentTime;
 	submarine.move();
 	updateDisplays();
-	/* updateMouseVelocity(); */
 	positionCamera();
 	renderer.render(scene, camera);
-	/* updatePreviousMousePosition(); */
 	requestAnimationFrame(mainLoop);
 }
-
 
 /*------------------------------events-----------------------------*/
 
@@ -182,17 +179,3 @@ window.addEventListener("resize", () =>
 	console.log("Pleep");
 	updateDimensions();
 });
-
-/* document.addEventListener("mousemove", e =>
-{
-	mousePosition.x = e.clientX;
-	mousePosition.y = e.clientY;
-});
-canvas.addEventListener("mousedown", () =>
-{
-	mouseDown = true;
-});
-document.addEventListener("mouseup", () =>
-{
-	mouseDown = false;
-}); */
