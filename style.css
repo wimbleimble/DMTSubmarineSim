@@ -9,84 +9,94 @@ COLOURS:
 */
 html, body
 {
-    margin: 0;
-    display: flex;
-    background-color: #393e46;
-    justify-content: center;
-    align-items: center;
-    font-family: 'Courier New', Courier, monospace;
-    box-sizing: border-box;
-    font-size: large;
-    width: 100%;
-    height: 100%;
+	margin: 0;
+	display: flex;
+	background-color: #393e46;
+	justify-content: center;
+	align-items: center;
+	font-family: 'Courier New', Courier, monospace;
+	box-sizing: border-box;
+	font-size: medium;
+	width: 100%;
+	height: 100%;
 }
 div
 {
-    display: flex;
-    box-sizing: border-box;
+	display: flex;
+	box-sizing: border-box;
 }
 .notFlex
 {
-    display: block;
+	display: block;
 }
 
 .container
 {
-    justify-content: space-between;
-    align-items: flex-start;
-    width: 100%;
-    height: 100%;
+	flex-direction: column;
+	justify-content: space-between;
+	align-items: flex-start;
+	width: 100%;
+	height: 100%;
 }
+
 .column
 {
-    flex-direction: column;
+	flex-direction: column;
 }
 .row
 {
-    flex-direction: row;
+	flex-direction: row;
 }
 .center
 {
-    align-items: center;
+	align-items: center;
 }
 .panel
 {
-    background-color: #222831;
-    padding: 20px;
-    border-radius: 10px;
+	background-color: #222831;
+	padding: 20px;
+	border-radius: 10px;
 }
 .overlay
 {
-    color: white;
-    opacity: 0.9;
-    -webkit-touch-callout: none;
-    -webkit-user-select: none;
-    -khtml-user-select: none;
-    -moz-user-select: none;
-    -ms-user-select: none;
-    user-select: none;
+	color: white;
+	opacity: 0.9;
+	-webkit-touch-callout: none;
+	-webkit-user-select: none;
+	-khtml-user-select: none;
+	-moz-user-select: none;
+	-ms-user-select: none;
+	user-select: none;
 }
 button
 {
-    font-size: large;
-    border: none;
-    font-family: 'Courier New', Courier, monospace;
-    background-color: #4a4d52;
-    color: white;
-    border-radius: 5px;
+	opacity: 0.5;
+	font-size: medium;
+	border: none;
+	font-family: 'Courier New', Courier, monospace;
+	background-color: #4a4d52;
+	color: white;
 }
 button:hover
 {
-    background-color: #cc0e74;
+	background-color: #cc0e74;
+	opacity: 1;
 }
 
 canvas
 {
-    position:absolute;
-    top: 0;
-    left: 0;
+	position:absolute;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
 }
 canvas:focus
 {
-    outline: none;
+	outline: none;
+}
+.background
+{
+	background-color: #4a4d52;
+	opacity: 0.5;
 }

@@ -1,6 +1,6 @@
 {
   "name": "submarine-simulator",
-  "version": "0.0.1",
+  "version": "1.0.0",
   "description": "DMT sub simulator",
   "main": "index.js",
   "scripts": {

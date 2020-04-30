@@ -35,6 +35,7 @@ class Ballast
 		this.emptyMass = emptyMass;	//mass of ballast when empty
 		this.maxVolume = maxVolume;	//total volume of ballast available to fill
 		this.proportionFull = 0;	//between 0 and 1, proportion of volume full of water.
+		this.flowRate = flowRate; 	//speed at which water can flow in and out of ballast
 	}
 	get waterVolume()
 	{
@@ -48,43 +49,61 @@ class Ballast
 	{
 		return g.clone().multiplyScalar(this.mass);
 	}
+	addWater(volume)
+	{
+		let newWater = this.waterVolume + volume;
+		let newProportion = clamp(newWater / this.maxVolume, 0, 1);
+		this.proportionFull = newProportion
+	}
+	subWater(volume)
+	{
+		this.addWater(-volume);
+		
+	}
 }
 
 class Submarine
 {
-	constructor(entity, mass, length, width, height, dragCoefficient, crossSectArea, bodyBuoyancy, ballasts, ballastLocations)
+	constructor(entity, mass, length, width, height, dragCoefficient, crossSectArea, ballasts, ballastLocations, ascentSpeed, descentSpeed, emergencySfaceSpeed)
 	{
-		this.mass = mass;
+		this.entity = entity;								//submarine three.js object
+		this.mass = mass;									//mass of submarine without ballasts, not full assembly
 		this.length = length
 		this.width = width;
 		this.height = height;
 		this.dragCoefficient = dragCoefficient;
 		this.crossSectArea = crossSectArea;
-		this.bodyBuoyancy = bodyBuoyancy;
-		this.entity = entity;								//submarine three.js object
-		this.appliedBuoyForce = new THREE.Vector3();		//force applied by ballasts
 		this.ballasts = ballasts;							//array containing both ballasts
 		this.ballastLocations = ballastLocations;			//location of ballast relative to front
 
-		//below variables are passed from previous frame, and initialized at zero
-		this.oldVelocity = new THREE.Vector3();
-		this.oldPosition = entity.position.clone();
-		//this.kineticEnergy = new THREE.Vector3();
+		this.ascentSpeed = ascentSpeed;
+		this.descentSpeed = descentSpeed;
+		this.emergencySurfaceSpeed = emergencySfaceSpeed;
+		this.oldVelocity = new THREE.Vector3();				//passed from previous frame, and initialized at zero
+		this.currentRotation = 0;
+		this.auto = true;
+		this.manualBallastTargets = [0, 0];
+		this.targetDepth;
 	}
 
 	get volume()
 	{
-		return this.length * this.width * this.height;
+		return round(this.length * this.width * this.height);
 	}
 
 	get totalMass()
 	{
-		let tmass = this.mass;
+		let tMass = this.mass;
 		this.ballasts.forEach(ballast =>
 		{
-			tmass += ballast.mass;
+			tMass += ballast.mass;
 		});
-		return tmass;
+		return round(tMass);
+	}
+
+	get weightWithoutBallasts()
+	{
+		return g.clone().multiplyScalar(this.mass);
 	}
 	//vector weight
 	get weight()
@@ -118,12 +137,6 @@ class Submarine
 		return direction.multiply(this.crossSectArea).multiply(this.dragCoefficient).multiplyScalar(0.5 * speed * speed * this.proportionSubmerged);
 	}
 
-	//loss of kinetic energy to water resistance
-	get kineticEnergyLoss()
-	{
-		return 
-	}
-
 	//total resultant force on submarine, vector
 	get resultantForce()
 	{
@@ -145,48 +158,246 @@ class Submarine
 	//distance from front of submarine that centre of mass is located
 	get centreOfMass()
 	{
-		let sumOfMassLengths = (this.length / 2) * this.mass;
-		this.ballasts.forEach((ballast, index) => 
-		{
-			sumOfMassLengths += ballast.mass * ballastLengths[index];
-		});
-
-		return sumOfMassLengths / totalMass;
+		let sumOfMassLengths = (this.ballastLocations[0] + ballastLocations[1]) * this.mass;
+		sumOfMassLengths += this.ballastLocations[0] * this.ballasts[0].mass;
+		sumOfMassLengths += (this.ballastLocations[0] + 2 * this.ballastLocations[1]) * this.ballasts[1].mass;
+		return round(sumOfMassLengths / this.totalMass);
 	}
-
-	get kineticEnergy()
+	get centreOfMassPt()
 	{
-		return (1/2) * this.mass * this.velocity.length() * this.velocity.length();
+		let pt = this.entity.position.clone();
+		pt.z -= this.length / 2
+		pt.z += this.centreOfMass;
+		return pt;
 	}
 
-	update()
+	get torque()
+	{
+		let sinTheta = Math.sin(this.currentRotation + (Math.PI / 2));
+		let buoyancyAndWeightT = (this.centreOfMass - this.ballastLocations[0] - this.ballastLocations[1]) * (this.buoyancyForce.length() - this.weightWithoutBallasts.length()) * sinTheta;
+		let ballastOneT = -(this.centreOfMass - this.ballastLocations[0]) * this.ballasts[0].weight.length() * sinTheta;
+		let ballastTwoT = (this.ballastLocations[0] + 2 * this.ballastLocations[1] - this.centreOfMass) * this.ballasts[1].weight.length() * sinTheta;
+		return round(buoyancyAndWeightT + ballastOneT + ballastTwoT);
+	}
+
+	get momentOfInertia()
+	{
+		let MOIDueToBallastOne = Math.abs(this.centreOfMass - this.ballastLocations[0]) * this.ballasts[0].mass;
+		let MOIDueToBallastTwo = Math.abs(this.ballastLocations[0] + 2 * this.ballastLocations[1] - this.centreOfMass) * this.ballasts[1].mass;
+		let MOIDueToSubBody = Math.abs(this.centreOfMass - this.ballastLocations[0] - this.ballastLocations[1]) * this.mass;
+		return  round(MOIDueToBallastOne + MOIDueToBallastTwo + MOIDueToSubBody);
+	}
+
+	get angularAcceleration()
+	{
+		return (this.torque / this.momentOfInertia) * (deltaTime / 1000);
+	}
+
+	get angularVelocity()
+	{
+		return this.angularAcceleration * (deltaTime / 1000);
+	}
+
+	//method updates position of submarine every frame
+	updatePhysics()
 	{
 		//this.previousPosition.copy(this.entity.position);
 		this.move();
-		this.calculateEnergyLoss();
+		this.rotate();
 	}
-	//method updates position of submarine every frame
 	move()
 	{
 		this.entity.position.add(this.velocity);
 		this.oldVelocity.copy(this.velocity);
 	}
-	calculateEnergyLoss()
+	rotate()
 	{
-
+		this.currentRotation += this.angularVelocity;
+		rotateAboutPoint(submarine.entity, this.centreOfMassPt, new THREE.Vector3(1, 0, 0), this.angularVelocity);
 	}
 
+	setState(state, unlock=false)
+	{
+		//to overide emergency surface, set state must be called with second parameter true
+		if((this.state === "emergencySurface" && unlock) || this.state !== "emergencySurface")
+		{
+			this.state = state;
+			switch(state)
+			{
+				case "lockDepth":
+				case "level":
+					this.targetDepth = clamp(this.entity.position.y, 0, -Infinity);
+					break;
+				case "emergencySurface":
+					this.auto = true;
+					break;
+			}
+		}
+		return false;
+	}
+
+	fillBallasts()
+	{
+		this.ballasts.forEach(ballast =>
+		{
+				ballast.addWater(ballast.flowRate * (deltaTime / 1000));
+		});
+	}
+
+	emptyBallasts()
+	{
+		this.ballasts.forEach(ballast =>
+		{
+			ballast.subWater(ballast.flowRate * (deltaTime / 1000));
+		})
+	}
+
+	updateControls()
+	{
+		//auto controls
+		if(this.auto)
+		{
+			switch(this.state)
+			{
+				case "ascend":
+					this.ascend();
+					break;
+				case "descend":
+					this.descend();
+					break;
+				case "lockDepth":
+					this.maintainDepth();
+					break;
+				case "level":
+					this.level();
+					this.maintainDepth();
+					break;
+				case "emergencySurface":
+					this.emergencySurface();
+					break;
+			}
+			console.log(this.angularVelocity);
+		}
+		//manual controls
+		else
+		{
+			this.ballasts.forEach((ballast, index) =>
+				{
+					if(ballast.proportionFull < this.manualBallastTargets[index])
+					{
+						ballast.addWater(ballast.flowRate * (deltaTime / 1000));
+					}
+					else if(ballast.proportionFull > this.manualBallastTargets[index])
+					{
+						ballast.subWater(ballast.flowRate * (deltaTime / 1000));
+					}
+				})
+		}
+	}
+
+	ascend()
+	{
+		if(this.velocity.y > this.ascentSpeed)
+		{
+			this.fillBallasts();
+		}
+		else if(this.velocity.y < this.ascentSpeed)
+		{
+			this.emptyBallasts();
+		}
+	}
+
+	descend()
+	{
+		
+		if(this.velocity.y > -this.descentSpeed)
+		{
+			this.fillBallasts();
+		}
+		else if(this.velocity.y < -this.descentSpeed)
+		{
+			this.emptyBallasts();
+		}
+	}
+
+	maintainDepth()
+	{
+
+		if(this.entity.position.y > this.targetDepth)
+		{
+			this.descend();
+		}
+		else if(this.entity.position.y < this.targetDepth)
+		{
+			this.ascend();
+		}
+	}
+
+	level()
+	{
+		if(this.currentRotation < 0)
+		{
+			this.ballasts[1].addWater(this.ballasts[1].flowRate * (deltaTime / 1000));
+			this.ballasts[0].subWater(this.ballasts[0].flowRate * (deltaTime / 1000));
+		}
+		if(this.currentRotation > 0)
+		{
+			this.ballasts[0].addWater(this.ballasts[0].flowRate * (deltaTime / 1000));
+			this.ballasts[1].subWater(this.ballasts[1].flowRate * (deltaTime / 1000));
+		}
+	}
+
+	emergencySurface()
+	{
+		//-3 and not 0 so that it decellerates slightly before surfacing
+		if(this.entity.position.y < -0.1)
+		{
+			if(this.velocity.y > this.emergencySurfaceSpeed)
+			{
+				this.fillBallasts();
+			}
+			else if(this.velocity.y < this.emergencySurfaceSpeed)
+			{
+				this.emptyBallasts();
+			}
+		}
+		else
+		{
+			console.log(this.state);
+			this.setState("lockDepth", true);
+		}	
+		
+	}
 }
 
 /*---------------------------html elements------------------------------*/
 const canvas = document.getElementById("3DViewport");
+let inputPanel = document.getElementById("inputPanel");
+let displayPanel = document.getElementById("displayPanel");
+
 let surfaceButton = document.getElementById("emergencySurface");
-let fpsDisplay = document.getElementById("frameCounter");
-let forceDisplay = document.getElementById("forceDisplay");
-let accelerationDisplay = document.getElementById("accelerationDisplay");
-let velocityDisplay = document.getElementById("velocityDisplay");
-let buoyancyDisplay = document.getElementById("buoyancyDisplay");
-let dragDisplay = document.getElementById("dragDisplay");
+let modeButton = document.getElementById("mode");
+
+let ballastOneControl = createSlider(0, 100, 0);
+let ballastOneControlDiv = document.createElement("div");
+ballastOneControlDiv.innerHTML = "Ballast One:";
+ballastOneControlDiv.appendChild(ballastOneControl);
+
+let ballastTwoControl = createSlider(0, 100, 0);
+let ballastTwoControlDiv = document.createElement("div");
+ballastTwoControlDiv.innerHTML = "Ballast Two:";
+ballastTwoControlDiv.appendChild(ballastTwoControl);
+
+let ascendButton = createButton("Ascend");
+let descendButton = createButton("Descend");
+let lockDepth = createButton("Lock Depth");
+let levelButton = createButton("Level");
+
+let fpsDisplay = createIndicator("FPS: ");
+let forceDisplay = createIndicator("F: ");
+let accelerationDisplay = createIndicator("A: ");
+let velocityDisplay = createIndicator("V: ");
+let depthDisplay = createIndicator("Depth: ");
 
 /*---------------------------content loaders----------------------------*/
 /*
@@ -246,16 +457,22 @@ const sunPosPhi = 2 * Math.PI * (sunAzimuth - 0.5);	//angle of sun from north
 const subLength = 0.03;
 const subHeight = 0.14;
 const subWidth = 0.16;
-const subMass = 0.2;											//overall mass of submarine
+const subMass = 0.2;													//overall mass of submarine
 
-const subDragCoefficient = new THREE.Vector3(0.2, 0.4, 0.5);//Drag coefficient traveling in each direction
+const subDragCoefficient = new THREE.Vector3(0.2, 0.4, 0.5);			//Drag coefficient traveling in each direction
 const subCrossSectArea = new THREE.Vector3(0.02718, 0.02088, 0.070064);	//cross sectional area in each direction
-const subBodyBuoyancy = new THREE.Vector3(0, 10, 0);		//buoyancy force on body without ballasts
-const ballastLocations = [0.1, 0.2];						//location of ballasts relative to front.
+const subBodyBuoyancy = new THREE.Vector3(0, 10, 0);					//buoyancy force on body without ballasts
+const ballastLocations = [0.1, 10];										//location of ballasts relative to front.
 
 //ballast parameters
-const ballastEmptyMass = 0.01;
-const ballastMaxVolume = 0.0004;
+const ballastEmptyMass = 0.01;		//mass of ballast when empty
+const ballastMaxVolume = 0.0004;	//volume of water ballast can comtail
+const flowRate = 0.0183;			//rate at which water can enter and leave ballast
+
+//sub movement constraints
+const subAscentSpeed = 0.1;
+const subDescentSpeed = 0.1;
+const emergencySurfaceSpeed = 0.2;
 
 /*-----------------------------scene objects----------------------------*/
 let scene;				//contains all world objects
@@ -275,6 +492,8 @@ entryPoint();
 
 async function entryPoint()	//handles overall main process
 {
+	drawDisplays();		//draw displays
+	drawAutoMenu();		//draw controls	
 	await init();		//initialize all scene objects
 	updateDimensions();	//set size of canvas to match viewport dimensions
 	mainLoop(0);		//begin mainLoop, passing an initial time of 0
@@ -343,12 +562,12 @@ async function init()	//initialises Three.js and scene
 
 	//create axis object
 	axes = new THREE.AxesHelper(5);
-	scene.add(axes);
+	//scene.add(axes);
 
 	//create submarine
 	let ballasts = [
-		new Ballast(ballastEmptyMass, ballastMaxVolume),
-		new Ballast(ballastEmptyMass, ballastMaxVolume)
+		new Ballast(ballastEmptyMass, ballastMaxVolume, flowRate),
+		new Ballast(ballastEmptyMass, ballastMaxVolume, flowRate)
 	];
 	let model = await loadModel("submarine.glb")
 	let subEntity = model.scene.children[0];
@@ -361,13 +580,15 @@ async function init()	//initialises Three.js and scene
 							  subHeight,
 							  subDragCoefficient,
 							  subCrossSectArea,
-							  subBodyBuoyancy,
 							  ballasts,
-							  ballastLocations);
+							  ballastLocations,
+							  subAscentSpeed,
+							  subDescentSpeed,
+							  emergencySurfaceSpeed);
 	
 
 	scene.add(submarine.entity);
-
+;
 	//set up compositor
 	compositor = new EffectComposer(renderer);
 	scenePass = new RenderPass(scene, camera);
@@ -381,12 +602,15 @@ async function init()	//initialises Three.js and scene
 
 function updateDimensions()	//resizes canvas to viewport
 {
-	canvas.width = window.innerWidth;
-	canvas.height = window.innerHeight;
-	compositor.setSize(window.innerWidth, window.innerHeight);
-	camera.aspect = window.innerWidth/window.innerHeight;
-	camera.updateProjectionMatrix();
-	renderer.setSize(window.innerWidth, window.innerHeight);	
+	let screenWidth = canvas.clientWidth;
+	let screenHeight = canvas.clientHeight;
+	if(screenWidth !== canvas.width || screenHeight !== canvas.height)
+	{
+		renderer.setSize(screenWidth, screenHeight, false);
+		compositor.setSize(screenWidth, screenHeight);
+		camera.aspect = screenWidth / screenHeight;
+		camera.updateProjectionMatrix();		
+	}	
 }
 
 function mainLoop(currentTime) //runs once per frame
@@ -396,9 +620,10 @@ function mainLoop(currentTime) //runs once per frame
 	previousTime = currentTime;
 
 	//move all objects
-	submarine.update();
+	submarine.updateControls();
+	submarine.updatePhysics();
 	positionCamera();
-	console.log(submarine.ballasts[0]);
+
 	//ui
 	updateDisplays();
 
@@ -409,14 +634,22 @@ function mainLoop(currentTime) //runs once per frame
 	requestAnimationFrame(mainLoop);
 }
 
+function drawDisplays()
+{
+	displayPanel.appendChild(fpsDisplay);
+	displayPanel.appendChild(forceDisplay);
+	displayPanel.appendChild(accelerationDisplay);
+	displayPanel.appendChild(velocityDisplay);
+	displayPanel.appendChild(depthDisplay);
+}
+
 function updateDisplays()	//updates ui overlay
 {
-	forceDisplay.innerHTML = "F: " + submarine.resultantForce.x + " " + submarine.resultantForce.y + " " + submarine.resultantForce.z;
-	accelerationDisplay.innerHTML = "A: " + submarine.acceleration.x + " " + submarine.acceleration.y + " " + submarine.acceleration.z;
-	velocityDisplay.innerHTML = "V: " + submarine.velocity.x + " " + submarine.velocity.y + " " + submarine.velocity.z;
-	buoyancyDisplay.innerHTML = "B: " + submarine.buoyancyForce.x + " " + submarine.buoyancyForce.y + " " + submarine.buoyancyForce.z;
-	dragDisplay.innerHTML = "D: " + submarine.waterResistanceForce.x + " " + submarine.waterResistanceForce.y + " " + submarine.waterResistanceForce.z;
-	fpsDisplay.innerHTML = Math.round(1000 / deltaTime);
+	forceDisplay.childNodes[1].innerHTML = submarine.resultantForce.y;
+	accelerationDisplay.childNodes[1].innerHTML = submarine.acceleration.y;
+	velocityDisplay.childNodes[1].innerHTML = submarine.velocity.y;
+	depthDisplay.childNodes[1].innerHTML = submarine.entity.position.y;
+	fpsDisplay.childNodes[1].innerHTML = round(1000 / deltaTime);
 }
 
 function positionCamera()	//displaces camera with submarine
@@ -426,29 +659,99 @@ function positionCamera()	//displaces camera with submarine
 	cameraController.update();
 }
 
+function drawAutoMenu()
+{
+	inputPanel.innerHTML = "";
+	inputPanel.appendChild(ascendButton);
+	inputPanel.appendChild(descendButton);
+	inputPanel.appendChild(lockDepth);
+	inputPanel.appendChild(levelButton);
+}
+
+function drawManualMenu()
+{
+	inputPanel.innerHTML = "";
+	inputPanel.appendChild(ballastOneControlDiv);
+	inputPanel.appendChild(ballastTwoControlDiv);
+}
+
 function clamp(value, min, max) //forces value to remain within range from min-max
 {
 	return Math.max(min, Math.min(value, max));
 }
 
-/*------------------------------events-----------------------------*/
-let boy = false;
-
-surfaceButton.addEventListener("click", () =>
+function round(value)			//rounds to 5 s.f. to try and account for some floating point rounding errors
 {
-	console.log("Surfacing!");
-	if(!boy)
+	return Math.round(value * 100000) / 100000;
+}
+
+function rotateAboutPoint(obj, point, axis, angle)
+{
+	obj.parent.localToWorld(obj.position);
+	obj.position.sub(point);
+    obj.position.applyAxisAngle(axis, angle);
+	obj.position.add(point);
+	obj.parent.worldToLocal(obj.position);
+	obj.rotateOnAxis(axis, angle)
+}
+
+function createSlider(min, max, value)
+{
+	let slider = document.createElement("input");
+	slider.type = "range";
+	slider.min = min;
+	slider.max = max;
+	slider.value = value;
+	return slider;
+}
+
+function createButton(text)
+{
+	let button = document.createElement("button");
+	button.innerHTML = text;
+	return button;
+}
+
+function createIndicator(label)
+{
+	let container = document.createElement("span");
+	let labelSpan = document.createElement("span");
+	let value = document.createElement("span");
+	labelSpan.innerHTML = label;
+	container.appendChild(labelSpan);
+	container.appendChild(value);
+	return container;
+}
+/*------------------------------events-----------------------------*/
+ballastOneControl.addEventListener("input", () =>
+{
+	submarine.manualBallastTargets[0] = ballastOneControl.value / 100;
+});
+
+ballastTwoControl.addEventListener("input", () =>
+{
+	submarine.manualBallastTargets[1] = ballastTwoControl.value / 100;
+});
+
+modeButton.addEventListener("click", () =>
+{
+	if(submarine.auto)
 	{
-		submarine.ballasts[0].proportionFull = 1;
-		submarine.ballasts[1].proportionFull = 1;
+		drawManualMenu();
+		modeButton.innerHTML = "Manual";
 	}
 	else
 	{
-		submarine.ballasts[0].proportionFull = 0;
-		submarine.ballasts[1].proportionFull = 0;
-		
+		drawAutoMenu();
+		modeButton.innerHTML = "Auto";
 	}
-	boy = !boy;
+	submarine.auto = !submarine.auto
 });
- 
+
+surfaceButton.addEventListener("click", () => {submarine.setState("emergencySurface")});
+ascendButton.addEventListener("click", () => {submarine.setState("ascend")});
+descendButton.addEventListener("click", () => {submarine.setState("descend")});
+lockDepth.addEventListener("click", () => {submarine.setState("lockDepth")});
+levelButton.addEventListener("click", () => {submarine.setState("level")});
+
 window.addEventListener("resize", updateDimensions);

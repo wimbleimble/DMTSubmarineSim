@@ -11,16 +11,11 @@
 <body>
 	<div class="container">
 		<canvas id="3DViewport">Not compatible with your current browser version.</canvas>
-		<div class="overlay column">
-			<span id="frameCounter"></span>
-			<span id="forceDisplay">F: </span>
-			<span id="accelerationDisplay">A: </span>
-			<span id="velocityDisplay">V: </span>
-			<span id="buoyancyDisplay">B: </span>
-			<span id="dragDisplay">D: </span>
+		<div class="overlay column" id="displayPanel">
 		</div>
 		<div class = "overlay column">				
-				<div><button id="emergencySurface">Emergency Surface</button></div>
+				<div><button id="emergencySurface">Emergency Surface</button><button id="mode">Auto</button></div>
+				<div id="inputPanel" class="column background"></div>
 		</div>
 	</div>
 </body>
