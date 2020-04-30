@@ -226,7 +226,7 @@ class Submarine
 			{
 				case "lockDepth":
 				case "level":
-					this.targetDepth = clamp(this.entity.position.y, 0, -Infinity);
+					this.targetDepth = clamp(this.entity.position.y, -Infinity, 0);
 					break;
 				case "emergencySurface":
 					this.auto = true;
@@ -276,7 +276,6 @@ class Submarine
 					this.emergencySurface();
 					break;
 			}
-			console.log(this.angularVelocity);
 		}
 		//manual controls
 		else
@@ -363,7 +362,6 @@ class Submarine
 		}
 		else
 		{
-			console.log(this.state);
 			this.setState("lockDepth", true);
 		}	
 		
