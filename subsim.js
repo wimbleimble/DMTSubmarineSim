@@ -17,13 +17,13 @@ Notes:
 
 --------------------------------------------------------------CONTENTS--
 LINE												SECTION
-  25												imports
-  32										   physical constants
-  36										   submarine classes
- 412									     variable declarations
+  30												imports
+  36										   physical constants
+  40										   submarine classes
+ 416									     variable declarations
  513											   functions
- 771											 event handlers
- 812											  entry point
+ 781											 event handlers
+ 823											  entry point
 -----------------------------------------------------------------------*/
 
 /*---------------------------importing modules-------------------------*/
@@ -509,6 +509,7 @@ let cubeCamera;			//skybox: takes sky image and maps it to scene background, Cub
 let waterSurface;		//water surface plane, Water
 let waterUnderside;		//upside down waterSurface copy so water is visible from below, Water
 let submarine;			//instance of Submarine, contains all physical properties of sub, Submarine
+let lines;				//depth indication lines every metre, Array(Line);
 
 /*------------------------------functions-----------------------------*/
 /*------------------------- ---general use----------------------------*/
@@ -701,6 +702,23 @@ async function init()
 							  subDescentSpeed,
 							  emergencySurfaceSpeed);
 	scene.add(submarine.entity);
+
+	let lines = [];
+	for(let i = 0; i < 50; i++)
+	{
+		let material = new THREE.LineBasicMaterial({color: 0xFF00FF});
+		let points = [];
+		points.push(new THREE.Vector3(0, -i, -1));
+		points.push(new THREE.Vector3(0, -i, 0));
+		points.push(new THREE.Vector3(0, -i, 1));
+
+		let geometry = new THREE.BufferGeometry().setFromPoints(points);
+		lines[i] = new THREE.Line(geometry, material);
+	}
+	lines.forEach(line =>
+		{
+			scene.add(line);
+		})
 }
 
 //resizes renderer to fit canvas, which always fills screen, void
