@@ -17,13 +17,13 @@ Notes:
 
 --------------------------------------------------------------CONTENTS--
 LINE												SECTION
-  30												imports
+  29												imports
   36										   physical constants
-  40										   submarine classes
- 416									     variable declarations
- 513											   functions
- 781											 event handlers
- 823											  entry point
+  41										   submarine classes
+ 417									     variable declarations
+ 515											   functions
+ 800											 event handlers
+ 842											  entry point
 -----------------------------------------------------------------------*/
 
 /*---------------------------importing modules-------------------------*/
@@ -34,8 +34,8 @@ import {Water} from "/node_modules/three/examples/jsm/objects/Water2.js";
 import {Sky} from "/node_modules/three/examples/jsm/objects/Sky.js";
 
 /*--------------------------physical constants--------------------------*/
-const g = new THREE.Vector3(0, -9.81, 0);
-const waterDensity = 997;
+const g = new THREE.Vector3(0, -9.81, 0);	//the force due to gravity per unit mass, Vector3
+const waterDensity = 997;					//density of water, Number
 
 /*------------------------submarine classes----------------------------*/
 class Ballast
@@ -100,6 +100,7 @@ class Submarine
 		this.descentSpeed = descentSpeed;					//target speed for auto descend, Number
 		this.emergencySurfaceSpeed = emergencySfaceSpeed;	//target speed for emergency surface, Number
 		this.oldVelocity = new THREE.Vector3();				//passed from previous frame, and initialized at zero, Vector3
+		this.oldAngularVelocity = 0;						//angular velocity passed from preivous frame.
 		this.currentRotation = 0;							//angle of length of sub from horizon, Number
 		this.auto = true;									//controls current mode, Boolean
 		this.manualBallastTargets = [0, 0];					//controls current target proportionFull for each ballast in manual mode, Array(Number)
@@ -224,7 +225,7 @@ class Submarine
 	//angular velocity about rotating axis (x), Number
 	get angularVelocity()
 	{
-		return this.angularAcceleration * (deltaTime / 1000);
+		return this.oldAngularVelocity + this.angularAcceleration * (deltaTime / 1000);
 	}
 
 	//method updates position and rotation of submarine every frame, void
@@ -472,7 +473,7 @@ const sunPosPhi = 2 * Math.PI * (sunAzimuth - 0.5);						//angle of sun from nor
 const subLength = 0.302;												//submarine length, Number
 const subHeight = 0.090;												//submarine height, Number
 const subWidth = 0.232;													//submarine width, Number
-const subMass = 5.5;												//mass of submarine without ballasts, Number
+const subMass = 5.5;													//mass of submarine without ballasts, Number
 
 /*
 modeling as a cuboid, drag coefficient given from https://www.engineersedge.com/fluid_flow/air_flow_drag_coefficient_14034.htm
@@ -703,7 +704,7 @@ async function init()
 							  emergencySurfaceSpeed);
 	scene.add(submarine.entity);
 
-	let lines = [];
+	lines = [];
 	for(let i = 0; i < 50; i++)
 	{
 		let material = new THREE.LineBasicMaterial({color: 0xFF00FF});
